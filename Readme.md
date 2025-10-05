@@ -32,3 +32,5 @@ make run-rle      # RLE compress/decompress test
 make run-all      # Run all supported modes
 make clean        # Remove binary and generated files
 ```
+
+> This project is casually coded.
