@@ -1,27 +1,39 @@
-# Compiler and flags
 CXX := g++
-CXXFLAGS := -std=c++17 -Wall -O2
+CXXFLAGS := -std=c++17 -Wall -O2 -Iinclude
+SRC_DIR := src
+OBJ_DIR := obj
+TARGET := compressor
 
-# Target executable
-TARGET := huffman
+SRCS := $(wildcard $(SRC_DIR)/*.cpp)
+OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
 
-# Source files
-SRC := huffman.cpp
-
-# Default build
 all: $(TARGET)
 
-# Compile
-$(TARGET): $(SRC)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SRC)
+$(TARGET): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-# Run compression example
-run: $(TARGET)
-	./$(TARGET) -c sample.txt compressed.huff
-	./$(TARGET) -d compressed.huff output.txt
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Clean up
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
+
 clean:
-	rm -f $(TARGET) *.o compressed.huff output.txt
+	rm -rf $(OBJ_DIR) $(TARGET) *.huff *.rle *.lz77 decompressed_*
 
-.PHONY: all run clean
+run-huffman:
+	./$(TARGET) huffman c sample.txt compressed.huff
+	./$(TARGET) huffman d compressed.huff decompressed_huff.txt
+
+run-rle:
+	./$(TARGET) rle c sample.txt compressed.rle
+	./$(TARGET) rle d compressed.rle decompressed_rle.txt
+
+run-lz77:
+	./$(TARGET) lz77 c sample.txt compressed.lz77
+	./$(TARGET) lz77 d compressed.lz77 decompressed_lz77.txt
+
+# Run all
+run-all: run-huffman run-lz77 run-rle
+
+.PHONY: all clean run-huffman run-rle run-lz77
