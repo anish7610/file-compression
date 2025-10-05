@@ -1,0 +1,68 @@
+1. File Compression in Python using Huffman Coding
+2. Provide a C++ Implementation
+3. huffman.cpp:1:10: fatal error: 'bits/stdc++.h' file not found
+
+   ```
+   #include <bits/stdc++.h>
+            ^~~~~~~~~~~~~~~
+   1 error generated.
+   ```
+4. huffman.cpp:51:65: error: expected expression
+
+   ```
+       vector<unsigned char> data((istreambuf_iterator<char>(in)), {});
+                                                                   ^
+   ```
+5. Provide updated code.
+6. Yes Please
+7. this
+
+   I can paste the full fixed code with deterministic Huffman tree building so you can just drop it in and run it — do you want me to do that?
+8. Provide makefile
+9. Explain and document key sections of code
+10. Add support for different types of compression. Modularize code. Update Makefile
+11. Sure
+12. Slight discrepancy in hufman
+
+    ```
+    MacBook-Air:file-compression anish$ diff sample.txt output.txt 
+    1c1,2
+    < Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
+    ---
+    > Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1900s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 15A0s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like 6ldus PageMaker including versions of Lorem Ipsum.
+    > o
+    \ No newline at end of file
+    ```
+13. It worked exactly before the refactoring
+14. here's the original
+
+    *(Full original `huffman.cpp` code pasted)*
+15. Update Readme
+
+    ```
+    ## Compile & Run
+
+    ```
+
+    clang++ huffman.cpp -o huffman --std=c++11
+    ./huffman -c sample.txt compressed.huff
+    ./huffman -d compressed.huff decompressed.txt
+
+    OR
+
+    make run
+
+    ```
+    ```
+16. With this
+
+    ```
+    ./compressor huffman c sample.txt compressed.huff
+    ./compressor huffman d compressed.huff decompressed.txt
+    diff sample.txt decompressed.txt
+    ```
+
+    And the make statements
+17. For all supported modes.
+18. Scrape all the prompts from this chat
+19. From the top

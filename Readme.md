@@ -37,12 +37,7 @@ make clean        # Remove binary and generated files
 
 - python file-compress.py
 
-## Check that:
-
-- compressed.huff is created.
-- diff sample.txt decompressed.txt
-
-### Future Improvements
+## Future Improvements
 
 - Improvements for Real Usage
 - Store frequency table inside compressed file so decompression can rebuild the tree without original text.
@@ -50,7 +45,8 @@ make clean        # Remove binary and generated files
 - Use pickle or JSON to serialize metadata.
 - Error handling for corrupted files.
 
+## Thought Process
 
-### Thought Process
+- [Chat](https://chatgpt.com/share/689a4019-efa0-8006-999f-a2ef8c5f98bd)
 
-- https://chatgpt.com/share/689a27c6-eac0-8006-8668-bb68237ea752
+- [Prompts](https://github.com/anish7600/file-compression/blob/master/prompts.txt)
