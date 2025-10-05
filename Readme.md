@@ -32,6 +32,6 @@ make run
 
 ### Thought Process
 
-- https://chatgpt.com/share/689a26c6-fa04-8006-93b1-b0119bd0833f
+- https://chatgpt.com/share/689a27c6-eac0-8006-8668-bb68237ea752
 
 
