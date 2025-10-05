@@ -107,10 +107,10 @@ def decompress(input_file, output_file, root):
     print(f"File decompressed and saved as {output_file}")
 
 if __name__ == "__main__":
-    compress("sample.txt", "compressed.bin")
+    compress("sample.txt", "compressed.huff")
 
     # NOTE: For decompression, you must have the same Huffman tree (root)
     # In practice, you’d serialize the tree or frequency table along with the compressed data.
     frequency = Counter(open("sample.txt", encoding='utf-8').read())
     root = build_huffman_tree(frequency)
-    decompress("compressed.bin", "output.txt", root)
+    decompress("compressed.huff", "output.txt", root)

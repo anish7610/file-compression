@@ -2,11 +2,15 @@
 
 ## Compile & Run
 
-- clang++ huffman.cpp -o huffman --std=c++11
-- ./huffman -c sample.txt compressed.huff   # Compress
-- ./huffman -d compressed.huff decompressed.txt   # Decompress
+```
+clang++ huffman.cpp -o huffman --std=c++11
+./huffman -c sample.txt compressed.huff
+./huffman -d compressed.huff decompressed.txt
 
-**Note**: C++ version doesn't work. Mismatched output.
+OR
+
+make run
+```
 
 ## In Python
 
@@ -28,6 +32,6 @@
 
 ### Thought Process
 
-- https://chatgpt.com/share/689a2038-48f4-8006-81f3-178e22089e89
+- https://chatgpt.com/share/689a26c6-fa04-8006-93b1-b0119bd0833f
 
 

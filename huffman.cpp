@@ -4,24 +4,29 @@
 #include <vector>
 #include <queue>
 #include <unordered_map>
-#include <bitset>
-#include <string>
 #include <iterator>
+#include <string>
 #include <cstdint>
+#include <bitset>
+#include <limits>
 
 using namespace std;
 
 struct Node {
-    unsigned char ch;
-    uint32_t freq;
+    unsigned char ch;   // representative char (for deterministic tie-break)
+    uint64_t freq;
     Node* left;
     Node* right;
-    Node(unsigned char c, uint32_t f) : ch(c), freq(f), left(nullptr), right(nullptr) {}
-    Node(Node* l, Node* r) : ch(0), freq(l->freq + r->freq), left(l), right(r) {}
+    Node(unsigned char c, uint64_t f) : ch(c), freq(f), left(nullptr), right(nullptr) {}
+    Node(Node* l, Node* r)
+        : ch(min(l->ch, r->ch)), freq(l->freq + r->freq), left(l), right(r) {}
 };
 
+// Deterministic comparator: sort by freq asc, then by ch asc.
+// This guarantees stable tree construction when frequencies tie.
 struct Compare {
-    bool operator()(Node* a, Node* b) const {
+    bool operator()(const Node* a, const Node* b) const {
+        if (a->freq == b->freq) return a->ch > b->ch;
         return a->freq > b->freq;
     }
 };
@@ -33,224 +38,212 @@ void freeTree(Node* root) {
     delete root;
 }
 
-void generateCodes(Node* root, const string& prefix, unordered_map<unsigned char, string>& codes) {
+void buildCodes(Node* root, string &cur, vector<string> &codes) {
     if (!root) return;
-    // Leaf node
     if (!root->left && !root->right) {
-        // Edge case: if prefix empty (single unique symbol in file), give it "0"
-        codes[root->ch] = prefix.empty() ? "0" : prefix;
+        // leaf
+        codes[root->ch] = cur.empty() ? "0" : cur; // if only one symbol, give "0"
         return;
     }
-    if (root->left)  generateCodes(root->left,  prefix + "0", codes);
-    if (root->right) generateCodes(root->right, prefix + "1", codes);
+    cur.push_back('0'); buildCodes(root->left, cur, codes); cur.pop_back();
+    cur.push_back('1'); buildCodes(root->right, cur, codes); cur.pop_back();
 }
 
-void compress(const string& inputFile, const string& outputFile) {
-    ifstream in(inputFile, ios::binary);
-    if (!in) {
-        cerr << "Error opening input file for reading: " << inputFile << "\n";
-        return;
-    }
-
-    // Read whole file into vector<unsigned char>
+bool compressFile(const string &inPath, const string &outPath) {
+    // read input file
+    ifstream in(inPath, ios::binary);
+    if (!in) { cerr << "Error: cannot open input file\n"; return false; }
     vector<unsigned char> data((istreambuf_iterator<char>(in)), istreambuf_iterator<char>());
     in.close();
 
-    // Frequency table (uint32_t for portability)
-    unordered_map<unsigned char, uint32_t> freq;
+    // frequency table
+    unordered_map<unsigned char, uint64_t> freq;
     for (unsigned char c : data) freq[c]++;
 
-    // Open output
-    ofstream out(outputFile, ios::binary);
-    if (!out) {
-        cerr << "Error opening output file for writing: " << outputFile << "\n";
-        return;
-    }
-
-    // If file empty, write zero table and exit
-    if (freq.empty()) {
+    // Edge: empty file
+    if (data.empty()) {
+        ofstream out(outPath, ios::binary);
+        // write empty header
         uint16_t tableSize = 0;
-        out.write(reinterpret_cast<const char*>(&tableSize), sizeof(tableSize));
+        out.write(reinterpret_cast<char*>(&tableSize), sizeof(tableSize));
+        uint64_t originalSize = 0;
+        out.write(reinterpret_cast<char*>(&originalSize), sizeof(originalSize));
         out.close();
-        cout << "Compression complete (empty input): " << outputFile << "\n";
-        return;
+        cout << "Compressed empty file -> " << outPath << "\n";
+        return true;
     }
 
-    // Build Huffman tree
+    // build priority queue
     priority_queue<Node*, vector<Node*>, Compare> pq;
-    for (auto &p : freq) {
-        pq.push(new Node(p.first, p.second));
-    }
+    for (auto &p : freq) pq.push(new Node(p.first, p.second));
+
     while (pq.size() > 1) {
-        Node* l = pq.top(); pq.pop();
-        Node* r = pq.top(); pq.pop();
-        pq.push(new Node(l, r));
+        Node* a = pq.top(); pq.pop();
+        Node* b = pq.top(); pq.pop();
+        pq.push(new Node(a, b));
     }
     Node* root = pq.top();
 
-    // Generate codes
-    unordered_map<unsigned char, string> codes;
-    generateCodes(root, "", codes);
+    // build codes (vector indexed by byte value)
+    vector<string> codes(256);
+    string cur;
+    buildCodes(root, cur, codes);
 
-    // Write frequency table:
-    // [uint16_t tableSize] then for each entry: [1 byte symbol][uint32_t freq]
-    uint16_t tableSize = static_cast<uint16_t>(freq.size());
-    out.write(reinterpret_cast<const char*>(&tableSize), sizeof(tableSize));
-    for (auto &p : freq) {
-        unsigned char symbol = p.first;
-        uint32_t f = p.second;
-        out.put(static_cast<char>(symbol));
-        out.write(reinterpret_cast<const char*>(&f), sizeof(f));
+    // create bitstring
+    string bitstr;
+    bitstr.reserve(data.size() * 4); // rough reservation
+    for (unsigned char c : data) {
+        bitstr += codes[c];
     }
 
-    // Encode data to bitstring
-    string encoded;
-    encoded.reserve(data.size() * 2); // heuristic reserve
-    for (unsigned char c : data) encoded += codes[c];
+    // padding
+    uint8_t extraBits = 0;
+    if (bitstr.size() % 8 != 0) {
+        extraBits = static_cast<uint8_t>(8 - (bitstr.size() % 8));
+        bitstr.append(extraBits, '0');
+    } else {
+        extraBits = 0;
+    }
 
-    // Padding: extraBits in [0..7]
-    uint8_t extraBits = static_cast<uint8_t>((8 - (encoded.size() % 8)) % 8);
-    if (extraBits) encoded.append(extraBits, '0');
+    // prepare output file and write header:
+    // [uint16_t tableSize]
+    // for each table entry: [unsigned char ch][uint64_t freq]
+    // [uint64_t originalSize]
+    // [uint8_t extraBits]
+    // [bytes of encoded data]
 
-    // Write extraBits as 1 byte (so decompressor knows how many to strip)
+    ofstream out(outPath, ios::binary);
+    if (!out) { cerr << "Error: cannot open output file\n"; freeTree(root); return false; }
+
+    uint16_t tableSize = static_cast<uint16_t>(freq.size());
+    out.write(reinterpret_cast<char*>(&tableSize), sizeof(tableSize));
+    for (auto &p : freq) {
+        out.put(static_cast<char>(p.first));
+        out.write(reinterpret_cast<char*>(&p.second), sizeof(p.second));
+    }
+
+    uint64_t originalSize = data.size();
+    out.write(reinterpret_cast<char*>(&originalSize), sizeof(originalSize));
+
     out.put(static_cast<char>(extraBits));
 
-    // Write encoded bits as bytes
-    for (size_t i = 0; i < encoded.size(); i += 8) {
-        bitset<8> bits(encoded.substr(i, 8));
-        unsigned char b = static_cast<unsigned char>(bits.to_ulong());
-        out.put(static_cast<char>(b));
+    // write encoded bytes
+    for (size_t i = 0; i < bitstr.size(); i += 8) {
+        uint8_t val = 0;
+        for (int b = 0; b < 8; ++b) {
+            if (bitstr[i + b] == '1') val |= (1u << (7 - b));
+        }
+        out.put(static_cast<char>(val));
     }
 
-    freeTree(root);
     out.close();
-    cout << "Compression complete: " << outputFile << "\n";
+    freeTree(root);
+    cout << "Compressed " << inPath << " -> " << outPath << " (orig bytes = " << originalSize << ")\n";
+    return true;
 }
 
-void decompress(const string& inputFile, const string& outputFile) {
-    ifstream in(inputFile, ios::binary);
-    if (!in) {
-        cerr << "Error opening compressed file for reading: " << inputFile << "\n";
-        return;
-    }
+bool decompressFile(const string &inPath, const string &outPath) {
+    ifstream in(inPath, ios::binary);
+    if (!in) { cerr << "Error: cannot open compressed file\n"; return false; }
 
-    // Read table size
+    // read table size
     uint16_t tableSize = 0;
     in.read(reinterpret_cast<char*>(&tableSize), sizeof(tableSize));
-    if (!in) {
-        cerr << "Error reading frequency table size\n";
-        return;
-    }
-
-    // Empty file case
-    if (tableSize == 0) {
-        // Create empty output
-        ofstream outEmpty(outputFile, ios::binary);
-        outEmpty.close();
-        cout << "Decompression complete (empty input): " << outputFile << "\n";
-        return;
-    }
-
-    unordered_map<unsigned char, uint32_t> freq;
+    unordered_map<unsigned char, uint64_t> freq;
     for (uint16_t i = 0; i < tableSize; ++i) {
         int ch = in.get();
-        if (ch == EOF) {
-            cerr << "Unexpected EOF while reading symbol from table\n";
-            return;
-        }
-        unsigned char symbol = static_cast<unsigned char>(ch);
-        uint32_t f = 0;
+        uint64_t f = 0;
         in.read(reinterpret_cast<char*>(&f), sizeof(f));
-        if (!in) {
-            cerr << "Unexpected EOF while reading frequency from table\n";
-            return;
-        }
-        freq[symbol] = f;
+        freq[static_cast<unsigned char>(ch)] = f;
     }
 
-    // Read extraBits byte
-    int eb = in.get();
-    if (eb == EOF) {
-        cerr << "Unexpected EOF while reading padding info\n";
-        return;
-    }
-    uint8_t extraBits = static_cast<uint8_t>(eb);
+    // read original size
+    uint64_t originalSize = 0;
+    in.read(reinterpret_cast<char*>(&originalSize), sizeof(originalSize));
 
-    // Read remaining bytes -> build bitstring
-    string bitstring;
-    // read all remaining bytes
-    char buffer;
-    while (in.get(buffer)) {
-        unsigned char b = static_cast<unsigned char>(buffer);
-        bitset<8> bits(b);
-        bitstring += bits.to_string();
-    }
-    in.close();
-
-    // Remove padding bits (if any)
-    if (extraBits > 0) {
-        if (extraBits > bitstring.size()) {
-            cerr << "Corrupt compressed data: padding larger than data\n";
-            return;
-        }
-        bitstring.erase(bitstring.size() - extraBits, extraBits);
+    // edge: empty original
+    if (originalSize == 0 && tableSize == 0) {
+        ofstream out(outPath, ios::binary);
+        out.close();
+        cout << "Decompressed empty file -> " << outPath << "\n";
+        return true;
     }
 
-    // Rebuild Huffman tree
+    // build Huffman tree deterministically from freq
     priority_queue<Node*, vector<Node*>, Compare> pq;
     for (auto &p : freq) pq.push(new Node(p.first, p.second));
     while (pq.size() > 1) {
-        Node* l = pq.top(); pq.pop();
-        Node* r = pq.top(); pq.pop();
-        pq.push(new Node(l, r));
+        Node* a = pq.top(); pq.pop();
+        Node* b = pq.top(); pq.pop();
+        pq.push(new Node(a, b));
     }
     Node* root = pq.top();
 
-    // Special case: single unique symbol
-    if (!root->left && !root->right) {
-        // Write symbol freq times (sum of freq values)
-        uint64_t total = 0;
-        for (auto &p : freq) total += p.second;
-        ofstream out(outputFile, ios::binary);
-        for (uint64_t i = 0; i < total; ++i) out.put(static_cast<char>(root->ch));
-        out.close();
-        freeTree(root);
-        cout << "Decompression complete: " << outputFile << "\n";
-        return;
+    // read extraBits
+    int extraBitsInt = in.get();
+    if (extraBitsInt == EOF) { cerr << "Error: truncated compressed file\n"; freeTree(root); return false; }
+    uint8_t extraBits = static_cast<uint8_t>(extraBitsInt);
+
+    // read remaining bytes into vector
+    vector<unsigned char> encodedBytes((istreambuf_iterator<char>(in)), istreambuf_iterator<char>());
+    in.close();
+
+    // build bitstring
+    string bitstr;
+    bitstr.reserve(encodedBytes.size() * 8ULL);
+    for (unsigned char b : encodedBytes) {
+        for (int i = 7; i >= 0; --i) bitstr.push_back((b & (1u << i)) ? '1' : '0');
+    }
+    if (extraBits && bitstr.size() >= extraBits) {
+        bitstr.erase(bitstr.end() - extraBits, bitstr.end());
     }
 
-    // Decode by traversing tree for each bit
-    ofstream out(outputFile, ios::binary);
-    Node* current = root;
-    for (char bit : bitstring) {
-        current = (bit == '0') ? current->left : current->right;
-        if (!current->left && !current->right) {
-            out.put(static_cast<char>(current->ch));
-            current = root;
+    // decode bits until we've produced originalSize bytes
+    ofstream out(outPath, ios::binary);
+    if (!out) { cerr << "Error: cannot open output file for decompression\n"; freeTree(root); return false; }
+
+    Node* cur = root;
+    uint64_t produced = 0;
+    for (size_t i = 0; i < bitstr.size() && produced < originalSize; ++i) {
+        cur = (bitstr[i] == '0') ? cur->left : cur->right;
+        if (!cur->left && !cur->right) {
+            out.put(static_cast<char>(cur->ch));
+            produced++;
+            cur = root;
         }
     }
+
     out.close();
     freeTree(root);
-    cout << "Decompression complete: " << outputFile << "\n";
+
+    if (produced != originalSize) {
+        cerr << "Warning: decompressed size mismatch (expected " << originalSize << ", got " << produced << ")\n";
+        return false;
+    }
+
+    cout << "Decompressed " << inPath << " -> " << outPath << " (bytes = " << produced << ")\n";
+    return true;
+}
+
+void printUsage(const char* prog) {
+    cout << "Usage:\n"
+         << "  " << prog << " -c <input> <output>   # compress\n"
+         << "  " << prog << " -d <input> <output>   # decompress\n";
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 4) {
-        cout << "Usage:\n"
-             << "  " << argv[0] << " -c input.bin output.huff   (compress)\n"
-             << "  " << argv[0] << " -d input.huff output.bin   (decompress)\n";
-        return 1;
-    }
-
+    if (argc != 4) { printUsage(argv[0]); return 1; }
     string mode = argv[1];
+    string inPath = argv[2];
+    string outPath = argv[3];
+
     if (mode == "-c") {
-        compress(argv[2], argv[3]);
+        if (!compressFile(inPath, outPath)) return 1;
     } else if (mode == "-d") {
-        decompress(argv[2], argv[3]);
+        if (!decompressFile(inPath, outPath)) return 1;
     } else {
-        cerr << "Invalid mode. Use -c to compress or -d to decompress.\n";
+        printUsage(argv[0]);
         return 1;
     }
-
     return 0;
 }
